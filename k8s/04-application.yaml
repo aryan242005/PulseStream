@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: pulsestream-api, namespace: pulsestream}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pulsestream-api}}
+  template:
+    metadata: {labels: {app: pulsestream-api}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: api
+          image: pulsestream:local
+          imagePullPolicy: IfNotPresent
+          args: ["api"]
+          ports: [{name: http, containerPort: 8000}]
+          envFrom: [{configMapRef: {name: pulsestream-config}}]
+          env:
+            - {name: DATABASE_URL, valueFrom: {secretKeyRef: {name: pulsestream-secret, key: DATABASE_URL}}}
+          readinessProbe: {httpGet: {path: /health/ready, port: 8000}, initialDelaySeconds: 5, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /health/live, port: 8000}, initialDelaySeconds: 10, periodSeconds: 10}
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: 1, memory: 512Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: pulsestream-api, namespace: pulsestream}
+spec:
+  selector: {app: pulsestream-api}
+  ports: [{name: http, port: 8000, targetPort: 8000}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: pulsestream-worker, namespace: pulsestream}
+spec:
+  replicas: 3
+  selector: {matchLabels: {app: pulsestream-worker}}
+  template:
+    metadata: {labels: {app: pulsestream-worker}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: worker
+          image: pulsestream:local
+          imagePullPolicy: IfNotPresent
+          args: ["worker"]
+          ports: [{name: health, containerPort: 8001}]
+          envFrom: [{configMapRef: {name: pulsestream-config}}]
+          env:
+            - {name: DATABASE_URL, valueFrom: {secretKeyRef: {name: pulsestream-secret, key: DATABASE_URL}}}
+          readinessProbe: {httpGet: {path: /health/ready, port: 8001}, initialDelaySeconds: 5, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /health/live, port: 8001}, initialDelaySeconds: 10, periodSeconds: 10}
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: 1, memory: 512Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: pulsestream-worker, namespace: pulsestream}
+spec:
+  selector: {app: pulsestream-worker}
+  ports: [{name: health, port: 8001, targetPort: 8001}]

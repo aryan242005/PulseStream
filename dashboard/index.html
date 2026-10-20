@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <title>PulseStream · Cold-chain operations</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <link rel="stylesheet" href="/assets/coldchain.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="PulseStream home"><span class="brand-mark">P</span><span>pulse<span class="brand-light">stream</span></span></a>
+      <div class="side-label">WORKSPACE</div>
+      <a class="nav-item active" href="#overview"><span class="nav-icon">◫</span> Overview</a>
+      <a class="nav-item" href="#shipments"><span class="nav-icon">▣</span> Shipments</a>
+      <a class="nav-item" href="#readings"><span class="nav-icon">⌁</span> Reading history</a>
+      <a class="nav-item" href="#operations"><span class="nav-icon">⠿</span> Pipeline health</a>
+      <div class="sidebar-bottom"><div class="side-label">COLD-CHAIN PIPELINE</div><div class="side-service"><i class="service-dot" id="side-dot"></i><span id="side-state">Connecting</span></div><div class="side-caption">Shipment telemetry · local demo</div></div>
+    </aside>
+
+    <main class="main" id="overview">
+      <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong>Overview</strong></div><div class="top-actions"><span class="updated" id="updated">Waiting for first refresh</span><button class="icon-button" id="refresh" type="button" title="Refresh now" aria-label="Refresh now">↻</button><a class="docs-link" href="/docs" target="_blank" rel="noreferrer">API docs <span>↗</span></a></div></header>
+
+      <section class="page-heading"><div><div class="eyebrow">COLD-CHAIN · LOCAL DEMONSTRATION</div><h1>Shipment monitoring</h1><p>Register shipments, stream sensor readings, and review temperature excursions.</p></div><div class="live-badge" id="live-badge"><span class="pulse"></span><span id="live-label">Connecting</span></div></section>
+
+      <div class="alert" id="connection-error" role="status" hidden></div>
+
+      <section class="metrics" aria-label="Shipment monitoring metrics">
+        <article class="metric-card"><div class="metric-top"><span>Registered shipments</span><span class="metric-icon violet">▣</span></div><div class="metric-value" id="m-shipments">—</div><div class="metric-foot">Configured for monitoring</div></article>
+        <article class="metric-card"><div class="metric-top"><span>Readings processed</span><span class="metric-icon green">✓</span></div><div class="metric-value" id="m-processed">—</div><div class="metric-foot">Committed to shipment history</div></article>
+        <article class="metric-card"><div class="metric-top"><span>Excursions</span><span class="metric-icon red">!</span></div><div class="metric-value" id="m-excursions">—</div><div class="metric-foot">Readings outside shipment limits</div></article>
+        <article class="metric-card"><div class="metric-top"><span>Retries / dead letters</span><span class="metric-icon amber">↻</span></div><div class="metric-value" id="m-retried">—</div><div class="metric-foot">Retry count / terminal failures</div></article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel producer-panel" id="publish">
+          <div class="panel-heading"><div><div class="eyebrow">SHIPMENT SETUP</div><h2>Register a shipment</h2></div><span class="method">POST /shipments</span></div>
+          <p class="panel-copy">Set the acceptable temperature band for this shipment. Limits are supplied by the operator for the product being transported.</p>
+          <form id="shipment-form">
+            <label for="shipment-id">Shipment ID</label><input id="shipment-id" name="shipment_id" placeholder="e.g. SHIP-1042" required maxlength="100" pattern="[A-Za-z0-9][A-Za-z0-9._-]*" autocomplete="off">
+            <label for="shipment-description">Description</label><input id="shipment-description" name="description" placeholder="Clinic delivery · Route 4" required maxlength="200">
+            <div class="field-row"><div><label for="min-temp">Minimum °C</label><input id="min-temp" name="min_temp_c" type="number" step="0.1" value="2" required></div><div><label for="max-temp">Maximum °C</label><input id="max-temp" name="max_temp_c" type="number" step="0.1" value="8" required></div></div>
+            <div class="form-bottom"><span id="shipment-message" class="form-message" aria-live="polite">Limits are shipment-specific</span><button class="primary-button" type="submit">Register shipment <span>＋</span></button></div>
+          </form>
+          <div class="divider"></div>
+          <div class="panel-heading"><div><div class="eyebrow">SENSOR INGESTION</div><h2>Record a temperature</h2></div><span class="method">POST /shipments/{id}/readings</span></div>
+          <form id="reading-form">
+            <label for="reading-shipment">Shipment</label><select id="reading-shipment" required><option value="">Register or load a shipment first</option></select>
+            <div class="field-row"><div><label for="sensor-id">Sensor ID</label><input id="sensor-id" value="sensor-01" required maxlength="100"></div><div><label for="temperature">Temperature °C</label><input id="temperature" type="number" step="0.1" value="5.0" required></div></div>
+            <div class="form-bottom"><span id="reading-message" class="form-message" aria-live="polite">Reading is checked against its shipment limits</span><button class="primary-button" id="reading-button" type="submit">Send reading <span>↗</span></button></div>
+          </form>
+        </article>
+
+        <article class="panel pipeline-panel">
+          <div class="panel-heading"><div><div class="eyebrow">INFRASTRUCTURE</div><h2>Live pipeline</h2></div><span class="subtle-tag">Compose</span></div>
+          <div class="pipeline-list">
+            <div class="pipeline-node"><div class="node-icon producer-icon">API</div><div class="node-copy"><strong>FastAPI ingestion</strong><span>Shipment and sensor validation</span></div><span class="node-state" id="api-state">Checking</span></div>
+            <div class="pipeline-link"><span></span><small>persisted publish</small></div>
+            <div class="pipeline-node"><div class="node-icon broker-icon">N</div><div class="node-copy"><strong>NATS JetStream</strong><span>Durable stream · 3 shards</span></div><span class="node-state" id="nats-state">Checking</span></div>
+            <div class="pipeline-link"><span></span><small>at-least-once delivery</small></div>
+            <div class="pipeline-node"><div class="node-icon worker-icon">W</div><div class="node-copy"><strong>Monitoring workers</strong><span id="worker-summary">Waiting for worker data</span></div><span class="node-state" id="workers-state">Checking</span></div>
+            <div class="pipeline-link"><span></span><small>transactional result</small></div>
+            <div class="pipeline-node"><div class="node-icon db-icon">DB</div><div class="node-copy"><strong>PostgreSQL</strong><span>Shipment state · reading history</span></div><span class="node-state" id="db-state">Checking</span></div>
+          </div>
+          <div class="guarantee"><span>ⓘ</span><span>Delivery is at least once. Unique event IDs protect committed results from duplicate processing.</span></div>
+        </article>
+      </section>
+
+      <section class="panel" id="shipments">
+        <div class="panel-heading"><div><div class="eyebrow">MONITORED CARGO</div><h2>Shipment status</h2></div><span class="subtle-tag">Latest reading wins</span></div>
+        <div class="table-wrap"><table><thead><tr><th>Shipment</th><th>Temperature</th><th>Allowed band</th><th>Current state</th><th>Readings</th><th>Excursions</th><th>Last reading</th></tr></thead><tbody id="shipment-rows"><tr><td colspan="7" class="empty-cell">No shipments registered.</td></tr></tbody></table></div>
+      </section>
+
+      <section class="panel" id="readings">
+        <div class="panel-heading"><div><div class="eyebrow">ACTIONABLE CONDITIONS</div><h2>Temperature excursions</h2></div><span class="subtle-tag">Latest 20 · operator review required</span></div>
+        <div class="table-wrap"><table><thead><tr><th>Shipment</th><th>Sensor</th><th>Reading</th><th>Allowed band</th><th>Observed at</th><th>Event ID</th></tr></thead><tbody id="excursion-rows"><tr><td colspan="6" class="empty-cell">No out-of-range readings recorded.</td></tr></tbody></table></div>
+        <div class="divider"></div>
+        <div class="panel-heading"><div><div class="eyebrow">NORMAL READINGS</div><h2>Latest in-range readings</h2></div><span class="subtle-tag">Excursions listed above</span></div>
+        <div class="table-wrap"><table><thead><tr><th>Shipment</th><th>Sensor</th><th>Temperature</th><th>Assessment</th><th>Worker</th><th>Observed at</th></tr></thead><tbody id="reading-rows"><tr><td colspan="6" class="empty-cell">Readings will appear after processing.</td></tr></tbody></table></div>
+      </section>
+
+      <section class="panel" id="operations">
+        <div class="panel-heading"><div><div class="eyebrow">DISTRIBUTED PIPELINE</div><h2>Workers & shard backlog</h2></div><span class="subtle-tag" id="shard-count">3 logical shards</span></div>
+        <div class="backlog-grid" id="backlog-grid"><div class="empty-state">Waiting for broker metrics…</div></div>
+        <div class="table-wrap"><table><thead><tr><th>Worker</th><th>Status</th><th>Owned shards</th><th>Processed</th><th>Retries</th><th>Last heartbeat</th></tr></thead><tbody id="worker-rows"><tr><td colspan="6" class="empty-cell">Waiting for worker data…</td></tr></tbody></table></div>
+        <div class="divider"></div>
+        <div class="panel-heading"><div><div class="eyebrow">DELIVERY RECOVERY</div><h2>Retry & dead-letter history</h2></div><span class="subtle-tag">Latest 20</span></div>
+        <div class="table-wrap"><table><thead><tr><th>Event</th><th>Worker</th><th>Outcome</th><th>Detail</th><th>Recorded at</th></tr></thead><tbody id="error-rows"><tr><td colspan="5" class="empty-cell">No retries or dead-letter records yet.</td></tr></tbody></table></div>
+      </section>
+      <footer class="footer"><span>PulseStream</span><span>Limits are configured per shipment · refreshes every 3 seconds</span><a href="/docs">API reference ↗</a></footer>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

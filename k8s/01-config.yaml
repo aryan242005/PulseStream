@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pulsestream-config
+  namespace: pulsestream
+data:
+  NATS_URL: nats://nats:4222
+  DATABASE_HOST: postgres
+  DATABASE_NAME: pulsestream
+  DATABASE_USER: pulsestream
+  SHARD_COUNT: "3"
+  MAX_DELIVERIES: "5"
+  WORKER_CONCURRENCY: "4"
+  WORKER_POLL_SECONDS: "2"
+  LOG_LEVEL: INFO
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pulsestream-secret
+  namespace: pulsestream
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: replace-this-local-password
+  DATABASE_URL: postgresql://pulsestream:replace-this-local-password@postgres:5432/pulsestream

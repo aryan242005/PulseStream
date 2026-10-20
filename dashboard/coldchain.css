@@ -1,0 +1,5 @@
+.producer-panel select{font:12px var(--mono);color:#e4e9f4;background:#0c1322;border:1px solid #27334b;border-radius:7px;padding:10px 11px;outline:none;width:100%;margin-bottom:13px}
+.producer-panel select:focus{border-color:#8878ff;box-shadow:0 0 0 2px #8878ff22}
+.divider{height:1px;background:#273149;margin:18px 0}
+.temperature-alert{color:var(--red)}
+.status-pill.healthy{background:#15352e;color:#63e3ad}

@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: nats, namespace: pulsestream}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: nats}}
+  template:
+    metadata: {labels: {app: nats}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: nats
+          image: nats:2.10.26-alpine
+          args: ["-js", "-sd", "/data", "-m", "8222"]
+          ports: [{name: client, containerPort: 4222}, {name: monitor, containerPort: 8222}]
+          volumeMounts: [{name: data, mountPath: /data}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8222}, initialDelaySeconds: 3}
+          livenessProbe: {httpGet: {path: /healthz, port: 8222}, initialDelaySeconds: 10}
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: 500m, memory: 512Mi}}
+      volumes: [{name: data, persistentVolumeClaim: {claimName: nats-data}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: nats, namespace: pulsestream}
+spec:
+  selector: {app: nats}
+  ports: [{name: client, port: 4222, targetPort: 4222}, {name: monitor, port: 8222, targetPort: 8222}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: postgres, namespace: pulsestream}
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector: {matchLabels: {app: postgres}}
+  template:
+    metadata: {labels: {app: postgres}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: postgres
+          image: postgres:16.8-alpine
+          ports: [{name: postgres, containerPort: 5432}]
+          env:
+            - {name: POSTGRES_DB, valueFrom: {configMapKeyRef: {name: pulsestream-config, key: DATABASE_NAME}}}
+            - {name: POSTGRES_USER, valueFrom: {configMapKeyRef: {name: pulsestream-config, key: DATABASE_USER}}}
+            - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: pulsestream-secret, key: POSTGRES_PASSWORD}}}
+          volumeMounts: [{name: data, mountPath: /var/lib/postgresql/data}]
+          readinessProbe: {exec: {command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]}, initialDelaySeconds: 5}
+          livenessProbe: {exec: {command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]}, initialDelaySeconds: 15}
+          resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {cpu: 1, memory: 1Gi}}
+      volumes: [{name: data, persistentVolumeClaim: {claimName: postgres-data}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: postgres, namespace: pulsestream}
+spec:
+  selector: {app: postgres}
+  ports: [{name: postgres, port: 5432, targetPort: 5432}]
